@@ -37,7 +37,6 @@
   };
 })();
 </script>
-
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mis Devocionales</title>
@@ -3504,6 +3503,34 @@ function renderBiblia(){
   function lbShare(){const vs=[...lbSel].sort((a,b)=>a-b);return `«${vs.map(v=>C[v-1]).join(" ")}»\n— ${lbRef()} (RV1909)`;}
 }
 
+/* ---------- Actualizaciones (solo en la APK) ---------- */
+const UPD_REPO="tortillaspalbuebito/Mis-Devocionales";
+function apkVersion(){try{return window.AndroidApp&&AndroidApp.versionCode?(+AndroidApp.versionCode()||0):0;}catch(_){return 0;}}
+function checkUpdate(manual){
+  if(!apkVersion())return Promise.resolve(null);
+  return fetch(`https://api.github.com/repos/${UPD_REPO}/releases/latest`,{cache:"no-store"})
+   .then(r=>{if(!r.ok)throw new Error(String(r.status));return r.json();})
+   .then(d=>{const n=+(String(d.tag_name||"").split(".").pop())||0;const a=(d.assets||[]).find(x=>/\.apk$/i.test(x.name));
+     const info={n,cur:apkVersion(),url:a?a.browser_download_url:d.html_url};
+     try{localStorage.setItem("updLast",String(Date.now()));}catch(_){}
+     if(n>info.cur){let skip=null;try{skip=localStorage.getItem("updSkip");}catch(_){}if(manual||skip!==String(n))showUpdate(info);}
+     else if(manual)toast("✓ Ya tienes la versión más nueva");
+     return info;})
+   .catch(()=>{if(manual)toast("No se pudo revisar. Revisa tu conexión a internet.");return null;});
+}
+function showUpdate(info){
+  const m=document.createElement("div");m.className="modal";
+  m.innerHTML=`<div class="box"><h2>📲 ¡Hay una versión nueva!</h2>
+  <p>Ya está lista la <b>versión 1.${info.n}</b> de Mis Devocionales (tienes la 1.${info.cur}).</p>
+  <p class="sub" style="margin-top:-4px">Toca <b>Descargar</b>; cuando termine, abre el archivo <b>MisDevocionales.apk</b> y elige <b>Actualizar</b>. Tus devocionales y avances se conservan.</p>
+  <div class="btns"><button class="btn ghost" data-u="later">Ahora no</button><button class="btn" data-u="go">⬇️ Descargar</button></div></div>`;
+  m.addEventListener("click",e=>{const u=e.target.closest("[data-u]");if(e.target===m||u){if(u&&u.dataset.u==="go"){try{AndroidApp.openUrl(info.url);}catch(_){}}else{try{localStorage.setItem("updSkip",String(info.n));}catch(_){}}m.remove();}});
+  document.body.appendChild(m);
+}
+function updateCard(){const v=apkVersion();if(!v)return "";
+  return `<div class="card"><h2>📲 Actualizaciones</h2><div class="sub" style="margin-bottom:10px">Tienes la versión <b>1.${v}</b> de la app. La app revisa sola una vez al día si hay una versión nueva.</div><button class="btn soft block" id="updchk">🔄 Buscar actualización ahora</button></div>`;}
+setTimeout(()=>{if(!apkVersion())return;let last=0;try{last=+localStorage.getItem("updLast")||0;}catch(_){}if(Date.now()-last>20*3600*1000)checkUpdate(false);},4000);
+
 /* ---------- Guía para principiantes ---------- */
 const GUIA=[
  ["📕 ¿Qué es la Biblia?","La Biblia es la Palabra de Dios. Tiene 66 libros escritos durante unos 1,500 años por más de 40 autores, pero con un solo mensaje: el amor de Dios y su plan de salvación por medio de Jesús.\n\nSe divide en dos partes:\n• Antiguo Testamento (39 libros): desde la creación hasta antes de Jesús.\n• Nuevo Testamento (27 libros): la vida de Jesús y la iglesia."],
@@ -4010,6 +4037,7 @@ function renderSettings(){
   const p=state.plan,c=state.cur;
   root.innerHTML=`
   <header class="top"><div class="brand">${logo()}<div><h1>Configuración</h1><div class="sub">Tu plan de lectura</div></div></div><button class="gear" data-look="1" aria-label="Apariencia" title="Apariencia">🎨</button></header>
+  ${updateCard()}
   ${navCard()}
   ${renderBackupCard()}
   <div class="card">
@@ -4041,6 +4069,7 @@ function renderSettings(){
   bindBackup();
   bindNavCard();
   if($("#welc"))$("#welc").onclick=()=>showWelcome();
+  if($("#updchk"))$("#updchk").onclick=()=>checkUpdate(true);
   if($("#homesc"))$("#homesc").onclick=()=>showHomeScreenHelp();
   root.querySelectorAll("[data-ver]").forEach(b=>b.onclick=()=>{state.version=b.dataset.ver;renderSettings();persist("Versión: "+bibleName());});
   if(!(p.sections&&p.sections.length))p.sections=ALL_KEYS();

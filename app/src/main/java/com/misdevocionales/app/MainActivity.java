@@ -104,6 +104,12 @@ public class MainActivity extends Activity {
     /** Funciones que la página puede llamar como window.AndroidApp.xxx() */
     class AppBridge {
         @JavascriptInterface public boolean isApp() { return true; }
+        @JavascriptInterface public int versionCode() {
+            try {
+                android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+                return android.os.Build.VERSION.SDK_INT >= 28 ? (int) pi.getLongVersionCode() : pi.versionCode;
+            } catch (Exception e) { return 0; }
+        }
         @JavascriptInterface public boolean canSpeak() { return ttsReady; }
         @JavascriptInterface public void speak(String text, float rate, String id) {
             if (!ttsReady || text == null) { notifyJs(id, true); return; }
