@@ -1,0 +1,53 @@
+name: Construir APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Desempacar proyecto (si subiste el .zip)
+        run: |
+          if [ -f devocionales-apk.zip ]; then unzip -o -q devocionales-apk.zip -d .; fi
+          test -f app/src/main/assets/index.html || { echo "Falta app/src/main/assets/index.html"; exit 1; }
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Compilar
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Renombrar
+        run: cp app/build/outputs/apk/debug/app-debug.apk MisDevocionales.apk
+
+      - name: Guardar como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisDevocionales-apk
+          path: MisDevocionales.apk
+
+      - name: Publicar descarga directa (Releases)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v1.${{ github.run_number }}" MisDevocionales.apk \
+            --title "Mis Devocionales v1.${{ github.run_number }}" \
+            --notes "Toca MisDevocionales.apk para descargarla e instalarla en tu celular Android." \
+            --latest
+            
