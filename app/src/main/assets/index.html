@@ -3556,7 +3556,7 @@ function checkUpdate(manual){
      if(n>info.cur){let skip=null;try{skip=localStorage.getItem("updSkip");}catch(_){}if(manual||skip!==String(n))showUpdate(info);}
      else if(manual)toast("✓ Ya tienes la versión más nueva");
      return info;})
-   .catch(()=>{if(manual)toast("No se pudo revisar. Revisa tu conexión a internet.");return null;});
+   .catch(e=>{if(manual){const c=String(e&&e.message);toast(c==="404"?"No se puede revisar: el repositorio de la app en GitHub es privado. Debe ser público para recibir actualizaciones.":"No se pudo revisar. Revisa tu conexión a internet.");}return null;});
 }
 function showUpdate(info){
   const m=document.createElement("div");m.className="modal";
