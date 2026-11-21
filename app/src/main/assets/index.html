@@ -22,6 +22,17 @@
   // Copiar al portapapeles
   try{var cw=function(t){try{AndroidApp.copy(String(t));return Promise.resolve();}catch(e){return Promise.reject(e);}};
     if(navigator.clipboard)navigator.clipboard.writeText=cw;else Object.defineProperty(navigator,"clipboard",{value:{writeText:cw}});}catch(e){}
+  // Barras del sistema (hora/batería arriba y botones de Android abajo) con los colores del tema de la app
+  var lastBars="";
+  function toHex(c){var m=String(c||"").match(/[\d.]+/g);if(!m||m.length<3)return null;if(m.length>3&&+m[3]<0.5)return null;
+    return "#"+[0,1,2].map(function(i){var v=Math.round(+m[i]).toString(16);return v.length<2?"0"+v:v;}).join("");}
+  function lum(h){return (0.299*parseInt(h.substr(1,2),16)+0.587*parseInt(h.substr(3,2),16)+0.114*parseInt(h.substr(5,2),16))/255;}
+  function syncBars(){try{if(!document.body)return;
+    var top=toHex(getComputedStyle(document.body).backgroundColor)||toHex(getComputedStyle(document.documentElement).backgroundColor);if(!top)return;
+    var tabs=document.getElementById("tabs");var bot=(tabs&&toHex(getComputedStyle(tabs).backgroundColor))||top;
+    var k=top+bot;if(k===lastBars)return;lastBars=k;AndroidApp.setBars(top,lum(top)>0.6,bot,lum(bot)>0.6);}catch(e){}}
+  document.addEventListener("DOMContentLoaded",syncBars);window.addEventListener("load",syncBars);setInterval(syncBars,700);
+  try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){lastBars="";setTimeout(syncBars,50);});}catch(e){}
   // Pausar voz y música al salir de la app
   window.appPause=function(){};
   // Botón «atrás» de Android
@@ -2753,16 +2764,39 @@ function renderNotas(){
 }
 
 /* ---------- Respaldo ---------- */
-function backupText(){
+/* Formato 2: JSON comprimido (gzip) en base64. No tiene comillas ni símbolos que WhatsApp
+   o las apps de notas puedan cambiar, y es mucho más corto. Se siguen aceptando respaldos del formato 1. */
+function b64FromBytes(u8){let s="";for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);}
+function bytesFromB64(b){const s=atob(b);const u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
+async function backupText(){
   const data=JSON.parse(JSON.stringify(state)); delete data.savedAt;
-  return "MISDEVOCIONALES-RESPALDO-1\n"+JSON.stringify(data);
+  const json=JSON.stringify(data);const raw=new TextEncoder().encode(json);
+  try{if(window.CompressionStream){const buf=await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+    return "MISDEVOCIONALES-RESPALDO-2Z\n"+b64FromBytes(new Uint8Array(buf))+"\nFIN";}}catch(_){}
+  return "MISDEVOCIONALES-RESPALDO-2B\n"+b64FromBytes(raw)+"\nFIN";
 }
-function parseBackup(t){
-  t=String(t||"").trim(); const i=t.indexOf("{"); if(i<0)throw new Error("sin datos");
+function backupCheck(d){if(!d||typeof d!=="object"||!Array.isArray(d.entries))throw new Error("formato");return d;}
+async function parseBackup(t){
+  t=String(t||"").replace(/\u200b|\ufeff/g,"").trim();
+  const m=t.match(/MISDEVOCIONALES-RESPALDO-2([ZB])/);
+  if(m){
+    let body=t.slice(m.index+m[0].length);const fin=body.search(/FIN/);
+    if(fin<0)throw new Error("incompleto");
+    body=body.slice(0,fin).replace(/[^A-Za-z0-9+/=]/g,"");
+    let bytes;try{bytes=bytesFromB64(body);}catch(_){throw new Error("dañado");}
+    if(m[1]==="Z"){if(!window.DecompressionStream)throw new Error("navegador");
+      try{const buf=await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();bytes=new Uint8Array(buf);}catch(_){throw new Error("dañado");}}
+    return backupCheck(JSON.parse(new TextDecoder().decode(bytes)));
+  }
+  // Formato 1 (texto JSON)
+  const i=t.indexOf("{"); if(i<0)throw new Error("sin datos");
   if(!/MISDEVOCIONALES-RESPALDO/.test(t.slice(0,i)))throw new Error("no es respaldo");
-  const d=JSON.parse(t.slice(i,t.lastIndexOf("}")+1));
-  if(typeof d!=="object"||!Array.isArray(d.entries))throw new Error("formato");
-  return d;
+  const j=t.lastIndexOf("}"); if(j<i)throw new Error("incompleto");
+  let js=t.slice(i,j+1);
+  try{return backupCheck(JSON.parse(js));}catch(_){}
+  // Arreglo: algunas apps cambian las comillas " por “ ” o «»; se corrigen solo donde forman parte de la estructura
+  js=js.replace(/([{\[,:]\s*)[“”„«»]/g,'$1"').replace(/[“”„«»](\s*[:,}\]])/g,'"$1');
+  try{return backupCheck(JSON.parse(js));}catch(e){throw new Error(/end of|Unterminated|Unexpected end/i.test(String(e.message))?"incompleto":"dañado");}
 }
 function renderBackupCard(){
   const n=state.entries.length, p=(state.peticiones||[]).length;
@@ -2774,17 +2808,23 @@ function renderBackupCard(){
   </div>`;
 }
 function bindBackup(){
-  $("#bkcopy").onclick=async()=>{const t=backupText();
+  $("#bkcopy").onclick=async()=>{const t=await backupText();
     try{await navigator.clipboard.writeText(t);toast("Respaldo copiado. Pégalo en WhatsApp o en tus notas.");}
     catch(_){const m=document.createElement("div");m.className="modal";m.innerHTML=`<div class="box wide"><h2>Copia tu respaldo</h2><p>Mantén presionado el texto, elige «Seleccionar todo» y luego «Copiar».</p><textarea rows="8" readonly style="font-size:.75rem">${esc(t)}</textarea><div class="btns" style="margin-top:12px"><button class="btn" data-r="1">Listo</button></div></div>`;m.addEventListener("click",e=>{if(e.target.getAttribute("data-r")||e.target===m)m.remove();});document.body.appendChild(m);}
   };
   $("#bkrest").onclick=()=>{const m=document.createElement("div");m.className="modal";
-    m.innerHTML=`<div class="box wide"><h2>♻️ Restaurar respaldo</h2><p>Pega aquí el texto completo del respaldo. Lo que tienes ahora en este navegador será reemplazado.</p><textarea id="bkin" rows="7" placeholder="MISDEVOCIONALES-RESPALDO-1…" style="font-size:.8rem"></textarea><div id="bkmsg" class="sub" style="margin-top:6px"></div>
+    m.innerHTML=`<div class="box wide"><h2>♻️ Restaurar respaldo</h2><p>Pega aquí el texto completo del respaldo. Lo que tienes ahora en este navegador será reemplazado.</p><textarea id="bkin" rows="7" placeholder="MISDEVOCIONALES-RESPALDO-1…" style="font-size:.8rem"></textarea><label class="btn ghost sm" style="margin-top:8px;display:inline-block;cursor:pointer">📂 Cargar desde un archivo<input type="file" id="bkfile" accept=".txt,text/plain" style="display:none"></label><div id="bkmsg" class="sub" style="margin-top:6px"></div>
     <div class="btns" style="margin-top:12px"><button class="btn ghost" data-r="0">Cancelar</button><button class="btn" data-r="ok">Restaurar</button></div></div>`;
     m.addEventListener("click",e=>{const r=e.target.getAttribute("data-r");if(e.target===m||r==="0"){m.remove();return;}
-      if(r==="ok"){let d;try{d=parseBackup(m.querySelector("#bkin").value);}catch(_){m.querySelector("#bkmsg").textContent="❌ Ese texto no parece un respaldo completo de Mis Devocionales.";return;}
-        state=Object.assign(blank(),d); state.seenWelcome=true; m.remove(); view=state.plan?"hoy":"setup"; applyLook(); render(); persist(`Respaldo restaurado: ${state.entries.length} devocionales ✓`);}});
-    document.body.appendChild(m); setTimeout(()=>m.querySelector("#bkin").focus(),50);};
+      if(r==="ok"){(async()=>{let d;const msg=m.querySelector("#bkmsg");msg.textContent="Revisando…";
+        try{d=await parseBackup(m.querySelector("#bkin").value);}catch(err){const k=String(err&&err.message);
+          msg.textContent=k==="incompleto"?"❌ El respaldo está incompleto: parece que se cortó al copiarlo o pegarlo. Cópialo de nuevo completo (desde la primera línea hasta la palabra FIN).":
+            k==="no es respaldo"||k==="sin datos"?"❌ Ese texto no es un respaldo de Mis Devocionales. Debe empezar con MISDEVOCIONALES-RESPALDO.":
+            k==="navegador"?"❌ Este navegador es muy antiguo para abrir este respaldo. Actualiza Chrome o la app.":
+            "❌ El respaldo se dañó al copiarlo (alguna app cambió el texto). Haz un respaldo nuevo y pásalo por WhatsApp o un archivo de texto.";return;}
+        state=Object.assign(blank(),d); state.seenWelcome=true; m.remove(); view=state.plan?"hoy":"setup"; applyLook(); render(); persist(`Respaldo restaurado: ${state.entries.length} devocionales ✓`);})();}});
+    document.body.appendChild(m); setTimeout(()=>m.querySelector("#bkin").focus(),50);
+    m.querySelector("#bkfile").onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{m.querySelector("#bkin").value=String(rd.result||"");m.querySelector("#bkmsg").textContent="Archivo cargado. Toca Restaurar.";};rd.readAsText(f);};};
 }
 
 /* ---------- Bienvenida ---------- */

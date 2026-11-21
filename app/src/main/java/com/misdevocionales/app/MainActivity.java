@@ -35,7 +35,8 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         web = new WebView(this);
-        web.setBackgroundColor(Color.parseColor("#F7F1E8"));
+        boolean night = (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        web.setBackgroundColor(Color.parseColor(night ? "#0F172A" : "#F7F1E8"));
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -125,6 +126,22 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void openUrl(String url) {
             runOnUiThread(() -> openExternal(Uri.parse(url)));
+        }
+        /** Pinta la barra de arriba (hora y batería) y la de abajo (botones de Android) con los colores de la app. */
+        @JavascriptInterface public void setBars(String top, boolean topLight, String bottom, boolean bottomLight) {
+            runOnUiThread(() -> {
+                try {
+                    android.view.Window w = getWindow();
+                    w.setStatusBarColor(Color.parseColor(top));
+                    w.setNavigationBarColor(Color.parseColor(bottom));
+                    android.view.View d = w.getDecorView();
+                    int f = d.getSystemUiVisibility();
+                    f = topLight ? (f | android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f & ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+                    if (android.os.Build.VERSION.SDK_INT >= 26)
+                        f = bottomLight ? (f | android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR) : (f & ~android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                    d.setSystemUiVisibility(f);
+                } catch (Exception ignored) { }
+            });
         }
         @JavascriptInterface public void exitApp() { runOnUiThread(() -> finish()); }
     }
