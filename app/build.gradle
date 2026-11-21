@@ -14,8 +14,19 @@ android {
         versionName '1.' + (System.getenv('VERSION_CODE') ?: '0')
     }
 
+    // Firma fija: todas las versiones se firman con la misma llave para poder instalarse una encima de otra.
+    signingConfigs {
+        fija {
+            storeFile file('misdevocionales.keystore')
+            storePassword 'misdevocionales'
+            keyAlias 'misdevocionales'
+            keyPassword 'misdevocionales'
+        }
+    }
+
     buildTypes {
-        release { minifyEnabled false }
+        debug { signingConfig signingConfigs.fija }
+        release { minifyEnabled false; signingConfig signingConfigs.fija }
     }
 
     compileOptions {
