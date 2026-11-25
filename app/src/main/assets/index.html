@@ -3825,7 +3825,7 @@ function cScene(bg,emo){
   return cSvg((B[bg]||B.d)+txt,bg==="n"?"n":"d");
 }
 // Cuentos que ya tienen ilustraciones: id → número de imágenes (cuentos/<id>/p1.webp, p2.webp…)
-const CUENTO_IMGS={noe:9,abraham:8,jose:8,moises:8};
+const CUENTO_IMGS={noe:9,abraham:8,jose:8,moises:8,daniel:8,jonas:9,nacimiento:9,tormenta:7};
 function mkCuento(id,t,ref,ic,arr,talk,pray){
   const nImg=CUENTO_IMGS[id]||0,im=i=>i<nImg?`cuentos/${id}/p${i+1}.webp`:undefined;
   const pages=arr.map(([sc,emo,tx,cita],i)=>({svg:()=>cScene(sc,emo),img:im(i),tx,cita}));
@@ -3880,22 +3880,23 @@ const CUENTOS_AT2=[
  mkCuento("daniel","Daniel y los leones","Daniel 6","🦁",[
   ["in","🧔 🦁","Una historia sobre ser fiel a Dios siempre.","Daniel 6"],
   ["city","🧔 👑","Daniel servía al rey Darío. Era honesto y trabajador, y el rey lo apreciaba mucho.","Daniel 6:1-3"],
-  ["city","😠 📜 👑","Unos hombres envidiosos convencieron al rey de hacer una ley: nadie podía orar a nadie más que al rey.","Daniel 6:4-9"],
-  ["in","🧔 🙏","Pero Daniel siguió orando a Dios tres veces al día junto a su ventana, como siempre lo hacía.","Daniel 6:10"],
-  ["in","👑 😢","Los hombres acusaron a Daniel. El rey se puso muy triste, pero tuvo que cumplir la ley.","Daniel 6:14-16"],
-  ["n","🧔 🦁 🦁","Echaron a Daniel al foso de los leones y lo taparon con una gran piedra.","Daniel 6:16-17"],
+  ["in","🧔 🙏","Unos hombres envidiosos lograron que el rey firmara una ley: nadie podía orar a nadie más que al rey. Pero Daniel siguió orando a Dios tres veces al día junto a su ventana, como siempre.","Daniel 6:7-10"],
+  ["city","😠 👀","Los hombres lo espiaron, lo vieron orando y corrieron a acusarlo ante el rey.","Daniel 6:11-13"],
+  ["city","👑 😢","El rey se puso muy triste, porque quería a Daniel, pero tuvo que cumplir la ley. Echaron a Daniel al foso de los leones.","Daniel 6:14-16"],
   ["n","👼 🦁 🧔","Dios envió a su ángel y cerró la boca de los leones. ¡No le hicieron nada!","Daniel 6:22"],
-  ["d","👑 🧔 😃","En la mañana el rey corrió al foso. ¡Daniel estaba sano! El rey mandó que todos respetaran al Dios de Daniel.","Daniel 6:19-27"]
+  ["d","👑 🧔","Muy temprano, el rey corrió al foso y gritó: «Daniel, ¿tu Dios pudo librarte?». ¡Y Daniel le respondió sano y salvo!","Daniel 6:19-22"],
+  ["d","👑 🧔 😃","El rey se llenó de alegría y mandó que todos respetaran al Dios de Daniel, porque él es el Dios vivo.","Daniel 6:23-27"]
  ],["¿Por qué Daniel siguió orando aunque era peligroso?","¿Cuándo oras tú a Dios?"],"Querido Dios, gracias porque escuchas mis oraciones. Ayúdame a ser fiel a ti como Daniel. Amén."),
  mkCuento("jonas","Jonás y el gran pez","Jonás 1–4","🐋",[
   ["m","🐋 🧔","Una historia sobre obedecer a Dios y su gran amor por todos.","Jonás 1–4"],
   ["d","🧔 💬","Dios le dijo a Jonás: «Ve a la ciudad de Nínive y diles que dejen de hacer lo malo». Pero Jonás no quería ir.","Jonás 1:1-2"],
   ["m","🧔 ⛵","Jonás se subió a un barco que iba en dirección contraria, ¡lejos de Nínive!","Jonás 1:3"],
-  ["t","⛵ 🌊","Dios envió una gran tormenta. Jonás les dijo a los marineros: «Es por mi culpa; échenme al mar».","Jonás 1:4-12"],
+  ["t","⛵ 🌊","Dios envió una gran tormenta. Los marineros tenían mucho miedo, ¡pero Jonás estaba dormido! Al despertar les dijo: «Es por mi culpa; échenme al mar».","Jonás 1:4-12"],
   ["m","🐋 🌊","Dios envió un gran pez que se tragó a Jonás. Estuvo dentro del pez tres días y tres noches.","Jonás 1:17"],
-  ["m","🐋 🙏","Dentro del pez, Jonás oró y le pidió perdón a Dios. Entonces el pez lo dejó en la playa.","Jonás 2:1, 10"],
+  ["m","🐋 🙏","Dentro del pez, Jonás oró y le pidió perdón a Dios.","Jonás 2:1-2"],
+  ["m","🐋 🏖️","Dios le habló al pez, y el pez dejó a Jonás en la playa.","Jonás 2:10"],
   ["city","🧔 📣","Esta vez Jonás obedeció. Fue a Nínive, y la gente se arrepintió de sus malos caminos.","Jonás 3:3-5"],
-  ["city","❤️ 👨‍👩‍👧‍👦","Dios perdonó a Nínive, porque Dios es bueno y ama a todas las personas.","Jonás 4:2, 11"]
+  ["d","🌳 🧔","Dios perdonó a Nínive. Jonás se enojó y se sentó bajo una planta, pero Dios le enseñó que él ama a todas las personas.","Jonás 4:2, 6-11"]
  ],["¿Qué pasó cuando Jonás huyó de Dios?","¿Por qué Dios perdonó a la gente de Nínive?"],"Querido Dios, perdóname cuando no te obedezco. Gracias porque amas a todas las personas. Amén.")
 ];
 const CUENTOS_NT=[
@@ -3960,6 +3961,7 @@ const CUENTOS_NT=[
   ["d","🧔 🙌 👥","Jesús visitó a sus discípulos y les dijo: «Yo estoy con ustedes todos los días».","Mateo 28:20"]
  ],["¿Por qué Jesús murió en la cruz?","¿Por qué es tan buena noticia que Jesús resucitó?"],"Querido Jesús, gracias por dar tu vida por mí. ¡Gracias porque estás vivo y siempre estás conmigo! Amén.")
 ];
+(function(){const d=CUENTOS.find(c=>c.id==="david");if(d)d.pages.forEach((p,i)=>{if(i<10)p.img=`cuentos/david/p${i+1}.webp`;});})();
 CUENTOS.splice(1,0,...CUENTOS_AT);CUENTOS.push(...CUENTOS_AT2,...CUENTOS_NT);
 
 let cuentoSel=null, cuentoPg=0;
