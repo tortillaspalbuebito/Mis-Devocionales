@@ -384,6 +384,7 @@ state.entries=state.entries||[];
 
 let view=state.plan?"hoy":"setup";
 var buscQ="",estTab="libros",estSel=null,estLec=null;
+var AI={ok:false,fn:null,tried:false};
 let setup={test:"NT",book:42,mode:"pasaje",ch:1,v:1,size:5,sections:FIELDS.map(f=>f[0])};
 let sampleApi=null, viewEntry=null;
 /* Nube: cada persona guarda en su propio espacio privado */
@@ -586,6 +587,7 @@ function renderToday(){
         <div class="lab"><span class="num">${i+1}</span><span class="t">${esc(f[1])}</span>${f[3]?"":`<span class="sub">(opcional)</span>`}</div>
         <p class="h">${esc(f[2])}</p>${GUIDE[f[0]]?`<details class="guide"><summary>💭 Preguntas que te ayudan</summary><ul>${GUIDE[f[0]].map(q=>`<li>${esc(q)}</li>`).join("")}</ul></details>`:""}
         ${f[0]==="titulo"?`<input type="text" data-k="titulo" value="${esc(d.titulo)}">`:`<textarea data-k="${f[0]}" rows="${f[0]==="reflexion"?5:3}">${esc(d[f[0]])}</textarea>`}
+        <div class="aihelp" data-ai="${f[0]}" ${AI.ok?"":"hidden"}><button class="btn ghost sm" data-aib="${f[0]}">✨ Ayúdame</button><div class="aiout"></div></div>
       </div>`).join("")}
     <div class="actions">
       <button class="btn block" id="finish">✓ Terminar devocional</button>
@@ -603,6 +605,7 @@ function renderToday(){
   if($("#ptext"))$("#ptext").addEventListener("paste",()=>{if($("#ptext").value.trim())return;setTimeout(()=>{const v=$("#ptext")&&$("#ptext").value;if(v&&v.trim()){awaitingPaste=false;savePasaje(v);toast("Texto pegado y acomodado ✓");}},60);});
   $("#readlink").addEventListener("click",()=>{awaitingPaste=true;});
   $("#savedraft").onclick=()=>persist("Borrador guardado");
+  bindAyudame(c,p,d);
   if($("#pmus"))$("#pmus").onclick=()=>{if(MUS.style)musStop();else musStart((state.look&&state.look.musStyle)||"suave");$("#pmus").textContent=MUS.style?"🎵 Detener música":"🎵 Música";};
   if($("#porig"))$("#porig").onclick=()=>p.mode==="capitulo"?showOrig(c.bookIdx,c.ch):showOrig(c.bookIdx,c.ch,c.v,c.vEnd||c.v);
   root.querySelectorAll("[data-antes]").forEach(b=>b.onclick=()=>{view="historial";viewEntry=+b.dataset.antes;render();window.scrollTo(0,0);});
@@ -3570,6 +3573,46 @@ function showUpdate(info){
 function updateCard(){const v=apkVersion();if(!v)return "";
   return `<div class="card"><h2>📲 Actualizaciones</h2><div class="sub" style="margin-bottom:10px">Tienes la versión <b>1.${v}</b> de la app. La app revisa sola una vez al día si hay una versión nueva.</div><button class="btn soft block" id="updchk">🔄 Buscar actualización ahora</button></div>`;}
 setTimeout(()=>{if(!apkVersion())return;let last=0;try{last=+localStorage.getItem("updLast")||0;}catch(_){}if(Date.now()-last>20*3600*1000)checkUpdate(false);},4000);
+
+/* ---------- ✨ Ayúdame (IA de Claude; solo donde la página puede pedirle a Claude) ---------- */
+function aiInit(){if(AI.tried)return;AI.tried=true;
+  try{if(window.claude&&typeof window.claude.use==="function")window.claude.use("sample").then(fn=>{if(fn){AI.fn=fn;AI.ok=true;document.querySelectorAll(".aihelp[hidden]").forEach(x=>x.hidden=false);}}).catch(()=>{});}catch(_){}}
+function bindAyudame(c,p,d){
+  aiInit();
+  root.querySelectorAll("[data-aib]").forEach(btn=>btn.onclick=async()=>{
+    if(!AI.fn)return;const k=btn.dataset.aib,F=FIELDS.find(f=>f[0]===k),box=btn.parentElement.querySelector(".aiout");
+    const ref=`${BOOKS[c.bookIdx][0]} ${c.ch}${p.mode==="capitulo"?"":":"+c.v+(c.vEnd&&c.vEnd!==c.v?"-"+c.vEnd:"")}`;
+    let texto=(d.pasaje||"").trim();
+    if(!texto){try{await loadRV();texto=p.mode==="capitulo"?rvText(c.bookIdx,c.ch):rvText(c.bookIdx,c.ch,c.v,c.vEnd||c.v);}catch(_){}}
+    if(texto.length>6000)texto=texto.slice(0,6000)+"…";
+    const hecho=FIELDS.filter(f=>f[0]!==k&&(d[f[0]]||"").trim()).map(f=>`- ${f[1]}: ${String(d[f[0]]).trim().slice(0,400)}`).join("\n")||"(todavía nada)";
+    const extra=k==="titulo"?"Cada opción es un título de 3 a 7 palabras.":k==="versiculo"?"Cada opción es un versículo del pasaje, copiado del texto dado, con su cita (libro capítulo:versículo).":k==="oracion"?"Cada opción es una oración corta dirigida a Dios.":"";
+    const prompt=`Ayudas a una persona a escribir su devocional cristiano personal. No escribes por ella: das ideas para que ella las haga suyas.
+
+Pasaje: ${ref}
+Texto del pasaje:
+${texto||"(no disponible; básate solo en la cita)"}
+
+Lo que la persona ya escribió en otras secciones:
+${hecho}
+
+Sección en la que necesita ayuda: «${F[1]}» — ${F[2]}
+Escribe 3 opciones distintas y breves (1 a 3 oraciones cada una), en primera persona, en español sencillo y cálido, fieles al pasaje. No inventes versículos ni cites otros pasajes. ${extra}
+Responde SOLO con las 3 opciones, cada una en una línea que empiece con «• ».`;
+    btn.disabled=true;btn.textContent="✨ Pensando…";box.innerHTML=`<div class="kv sub" style="margin-top:8px">Pensando…</div>`;
+    let txt="";
+    try{const r=await AI.fn(prompt,{modelTier:"quick",onText:({text})=>{txt=text;box.firstElementChild.textContent=text;}});txt=r.text||txt;}
+    catch(e){btn.disabled=false;btn.textContent="✨ Ayúdame";
+      if(e&&e.code==="not_granted"){box.innerHTML="";root.querySelectorAll(".aihelp").forEach(x=>x.hidden=true);AI.ok=false;return;}
+      box.innerHTML=`<div class="kv sub" style="margin-top:8px">${e&&e.code==="rate_limited"?"Se hicieron muchas peticiones seguidas. Espera un momento e inténtalo otra vez.":"No se pudo obtener ayuda ahora. Inténtalo de nuevo."}</div>`;return;}
+    btn.disabled=false;btn.textContent="✨ Otras ideas";
+    let ops=txt.split(/\n+/).map(l=>l.trim()).filter(l=>/^[•\-*]/.test(l)).map(l=>l.replace(/^[•\-*]\s*/,"").trim()).filter(Boolean);
+    if(!ops.length)ops=[txt.trim()];
+    box.innerHTML=ops.slice(0,3).map((o,i)=>`<div class="kv" style="margin-top:8px"><div>${esc(o)}</div><button class="btn soft sm" data-aiuse="${i}" style="margin-top:6px">Usar esta idea</button></div>`).join("")+`<div class="sub" style="margin-top:6px">💡 Son solo ideas: cámbialas con tus propias palabras.</div>`;
+    box.querySelectorAll("[data-aiuse]").forEach(u=>u.onclick=()=>{const el=root.querySelector(`[data-k="${k}"]`);if(!el)return;const o=ops[+u.dataset.aiuse];
+      el.value=(k==="titulo"||!el.value.trim())?o:el.value.replace(/\s+$/,"")+"\n"+o;el.dispatchEvent(new Event("input",{bubbles:true}));el.focus();toast("Idea agregada ✓");});
+  });
+}
 
 /* ---------- Guía para principiantes ---------- */
 const GUIA=[
