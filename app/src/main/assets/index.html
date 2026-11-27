@@ -581,13 +581,14 @@ function renderToday(){
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px">
       <h2 style="margin:0">Tu devocional</h2>
+      <button class="btn soft sm aihelp" id="aiAll" ${AI.ok?"":"hidden"}>✨ Ayúdame</button>
     </div>
+    <div id="aiPanel"></div>
     ${activeFields().map((f,i)=>`
       <div class="field">
         <div class="lab"><span class="num">${i+1}</span><span class="t">${esc(f[1])}</span>${f[3]?"":`<span class="sub">(opcional)</span>`}</div>
         <p class="h">${esc(f[2])}</p>${GUIDE[f[0]]?`<details class="guide"><summary>💭 Preguntas que te ayudan</summary><ul>${GUIDE[f[0]].map(q=>`<li>${esc(q)}</li>`).join("")}</ul></details>`:""}
         ${f[0]==="titulo"?`<input type="text" data-k="titulo" value="${esc(d.titulo)}">`:`<textarea data-k="${f[0]}" rows="${f[0]==="reflexion"?5:3}">${esc(d[f[0]])}</textarea>`}
-        <div class="aihelp" data-ai="${f[0]}" ${AI.ok?"":"hidden"}><button class="btn ghost sm" data-aib="${f[0]}">✨ Ayúdame</button><div class="aiout"></div></div>
       </div>`).join("")}
     <div class="actions">
       <button class="btn block" id="finish">✓ Terminar devocional</button>
@@ -3579,39 +3580,48 @@ function aiInit(){if(AI.tried)return;AI.tried=true;
   try{if(window.claude&&typeof window.claude.use==="function")window.claude.use("sample").then(fn=>{if(fn){AI.fn=fn;AI.ok=true;document.querySelectorAll(".aihelp[hidden]").forEach(x=>x.hidden=false);}}).catch(()=>{});}catch(_){}}
 function bindAyudame(c,p,d){
   aiInit();
-  root.querySelectorAll("[data-aib]").forEach(btn=>btn.onclick=async()=>{
-    if(!AI.fn)return;const k=btn.dataset.aib,F=FIELDS.find(f=>f[0]===k),box=btn.parentElement.querySelector(".aiout");
+  const btn=$("#aiAll"),panel=$("#aiPanel");if(!btn)return;
+  btn.onclick=async()=>{
+    if(!AI.fn)return;
+    const act=activeFields();let need=act.filter(f=>!(d[f[0]]||"").trim());if(!need.length)need=act;
     const ref=`${BOOKS[c.bookIdx][0]} ${c.ch}${p.mode==="capitulo"?"":":"+c.v+(c.vEnd&&c.vEnd!==c.v?"-"+c.vEnd:"")}`;
     let texto=(d.pasaje||"").trim();
     if(!texto){try{await loadRV();texto=p.mode==="capitulo"?rvText(c.bookIdx,c.ch):rvText(c.bookIdx,c.ch,c.v,c.vEnd||c.v);}catch(_){}}
     if(texto.length>6000)texto=texto.slice(0,6000)+"…";
-    const hecho=FIELDS.filter(f=>f[0]!==k&&(d[f[0]]||"").trim()).map(f=>`- ${f[1]}: ${String(d[f[0]]).trim().slice(0,400)}`).join("\n")||"(todavía nada)";
-    const extra=k==="titulo"?"Cada opción es un título de 3 a 7 palabras.":k==="versiculo"?"Cada opción es un versículo del pasaje, copiado del texto dado, con su cita (libro capítulo:versículo).":k==="oracion"?"Cada opción es una oración corta dirigida a Dios.":"";
-    const prompt=`Ayudas a una persona a escribir su devocional cristiano personal. No escribes por ella: das ideas para que ella las haga suyas.
+    const hecho=act.filter(f=>(d[f[0]]||"").trim()).map(f=>`- ${f[1]}: ${String(d[f[0]]).trim().slice(0,400)}`).join("\n")||"(todavía nada)";
+    const prompt=`Ayudas a una persona a escribir su devocional cristiano personal. No escribes por ella: das ideas breves para que ella las haga suyas.
 
 Pasaje: ${ref}
 Texto del pasaje:
 ${texto||"(no disponible; básate solo en la cita)"}
 
-Lo que la persona ya escribió en otras secciones:
+Lo que la persona ya escribió:
 ${hecho}
 
-Sección en la que necesita ayuda: «${F[1]}» — ${F[2]}
-Escribe 3 opciones distintas y breves (1 a 3 oraciones cada una), en primera persona, en español sencillo y cálido, fieles al pasaje. No inventes versículos ni cites otros pasajes. ${extra}
-Responde SOLO con las 3 opciones, cada una en una línea que empiece con «• ».`;
-    btn.disabled=true;btn.textContent="✨ Pensando…";box.innerHTML=`<div class="kv sub" style="margin-top:8px">Pensando…</div>`;
+Da UNA idea breve (1 a 3 oraciones, en primera persona, español sencillo y cálido, fiel al pasaje) para cada una de estas secciones:
+${need.map(f=>`- "${f[0]}": ${f[1]} — ${f[2]}`).join("\n")}
+Reglas: el título es de 3 a 7 palabras; el versículo clave se copia del texto dado con su cita; la oración va dirigida a Dios. No inventes versículos ni cites otros pasajes.
+Responde SOLO con un objeto JSON cuyas claves sean exactamente las de arriba y cuyos valores sean el texto de cada idea.`;
+    btn.disabled=true;btn.textContent="✨ Pensando…";panel.innerHTML=`<div class="kv sub" style="margin:0 0 12px">✨ Claude está leyendo el pasaje…</div>`;
     let txt="";
-    try{const r=await AI.fn(prompt,{modelTier:"quick",onText:({text})=>{txt=text;box.firstElementChild.textContent=text;}});txt=r.text||txt;}
+    try{const r=await AI.fn(prompt,{modelTier:"quick"});txt=r.text||"";}
     catch(e){btn.disabled=false;btn.textContent="✨ Ayúdame";
-      if(e&&e.code==="not_granted"){box.innerHTML="";root.querySelectorAll(".aihelp").forEach(x=>x.hidden=true);AI.ok=false;return;}
-      box.innerHTML=`<div class="kv sub" style="margin-top:8px">${e&&e.code==="rate_limited"?"Se hicieron muchas peticiones seguidas. Espera un momento e inténtalo otra vez.":"No se pudo obtener ayuda ahora. Inténtalo de nuevo."}</div>`;return;}
+      if(e&&e.code==="not_granted"){panel.innerHTML="";btn.hidden=true;AI.ok=false;return;}
+      panel.innerHTML=`<div class="kv sub" style="margin:0 0 12px">${e&&e.code==="rate_limited"?"Se hicieron muchas peticiones seguidas. Espera un momento e inténtalo otra vez.":"No se pudo obtener ayuda ahora. Inténtalo de nuevo."}</div>`;return;}
     btn.disabled=false;btn.textContent="✨ Otras ideas";
-    let ops=txt.split(/\n+/).map(l=>l.trim()).filter(l=>/^[•\-*]/.test(l)).map(l=>l.replace(/^[•\-*]\s*/,"").trim()).filter(Boolean);
-    if(!ops.length)ops=[txt.trim()];
-    box.innerHTML=ops.slice(0,3).map((o,i)=>`<div class="kv" style="margin-top:8px"><div>${esc(o)}</div><button class="btn soft sm" data-aiuse="${i}" style="margin-top:6px">Usar esta idea</button></div>`).join("")+`<div class="sub" style="margin-top:6px">💡 Son solo ideas: cámbialas con tus propias palabras.</div>`;
-    box.querySelectorAll("[data-aiuse]").forEach(u=>u.onclick=()=>{const el=root.querySelector(`[data-k="${k}"]`);if(!el)return;const o=ops[+u.dataset.aiuse];
-      el.value=(k==="titulo"||!el.value.trim())?o:el.value.replace(/\s+$/,"")+"\n"+o;el.dispatchEvent(new Event("input",{bubbles:true}));el.focus();toast("Idea agregada ✓");});
-  });
+    let ideas={};try{const m=txt.match(/\{[\s\S]*\}/);ideas=JSON.parse(m?m[0]:txt);}catch(_){ideas={};}
+    const keys=need.map(f=>f[0]).filter(k=>typeof ideas[k]==="string"&&ideas[k].trim());
+    if(!keys.length){panel.innerHTML=`<div class="kv" style="margin:0 0 12px">${esc(txt.trim()||"No llegaron ideas. Inténtalo de nuevo.")}</div>`;return;}
+    panel.innerHTML=`<div class="kv" style="margin:0 0 14px"><div style="font-weight:700;margin-bottom:8px">✨ Ideas para tu devocional</div>
+      ${keys.map(k=>{const F=FIELDS.find(f=>f[0]===k);return `<div style="margin-bottom:10px"><div class="sub"><b>${esc(F[1])}</b></div><div>${esc(ideas[k].trim())}</div><button class="btn ghost sm" data-aiuse="${k}" style="margin-top:4px">Usar</button></div>`;}).join("")}
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn soft sm" id="aiUseAll">Usar todas en las secciones vacías</button><button class="btn ghost sm" id="aiClose">Cerrar</button></div>
+      <div class="sub" style="margin-top:6px">💡 Son solo ideas: cámbialas con tus propias palabras.</div></div>`;
+    const put=k=>{const el=root.querySelector(`[data-k="${k}"]`);if(!el)return false;const o=ideas[k].trim();
+      el.value=(k==="titulo"||!el.value.trim())?o:el.value.replace(/\s+$/,"")+"\n"+o;el.dispatchEvent(new Event("input",{bubbles:true}));return true;};
+    panel.querySelectorAll("[data-aiuse]").forEach(u=>u.onclick=()=>{if(put(u.dataset.aiuse)){u.textContent="✓ Agregada";u.disabled=true;}});
+    $("#aiUseAll").onclick=()=>{let n=0;keys.forEach(k=>{const el=root.querySelector(`[data-k="${k}"]`);if(el&&!el.value.trim()&&put(k))n++;});toast(n?`${n} idea${n>1?"s":""} agregada${n>1?"s":""} ✓`:"Esas secciones ya tienen texto");};
+    $("#aiClose").onclick=()=>{panel.innerHTML="";btn.textContent="✨ Ayúdame";};
+  };
 }
 
 /* ---------- Guía para principiantes ---------- */
